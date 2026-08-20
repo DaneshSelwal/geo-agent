@@ -1,0 +1,119 @@
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# =========================
+# Environment / Secrets
+# =========================
+
+.env
+.env.*
+!.env.example
+
+# Google Earth Engine credentials / local auth
+.credentials/
+*.credentials
+credentials.json
+
+# Google Cloud credentials
+gcloud-credentials.json
+service-account.json
+*-service-account.json
+
+# =========================
+# Testing
+# =========================
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# =========================
+# Type checking / linters
+# =========================
+
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# =========================
+# Jupyter
+# =========================
+
+.ipynb_checkpoints/
+
+# =========================
+# IDEs / Editors
+# =========================
+
+.vscode/
+.idea/
+
+# Keep VS Code project recommendations/settings only if you
+# intentionally want to share them.
+# !.vscode/extensions.json
+
+# =========================
+# OS files
+# =========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+
+*.log
+logs/
+
+# =========================
+# Temporary files
+# =========================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# =========================
+# Generated outputs
+# =========================
+
+outputs/
+output/
+results/
+artifacts/
+
+# Generated maps / images
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+
+# =========================
+# Local development
+# =========================
+
+*.local

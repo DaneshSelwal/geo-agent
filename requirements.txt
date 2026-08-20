@@ -1,0 +1,4 @@
+pytest
+pydantic
+google-genai
+python-dotenv
