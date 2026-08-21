@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import ee
 
 from app.models.analysis import (
@@ -9,7 +7,6 @@ from app.models.analysis import (
     DataQuality,
     Methodology,
 )
-
 
 S2_DATASET = "COPERNICUS/S2_SR_HARMONIZED"
 
@@ -31,14 +28,7 @@ def mask_s2_clouds(image: ee.Image) -> ee.Image:
     cloud_bit_mask = 1 << 10
     cirrus_bit_mask = 1 << 11
 
-    mask = (
-        qa.bitwiseAnd(cloud_bit_mask)
-        .eq(0)
-        .And(
-            qa.bitwiseAnd(cirrus_bit_mask)
-            .eq(0)
-        )
-    )
+    mask = qa.bitwiseAnd(cloud_bit_mask).eq(0).And(qa.bitwiseAnd(cirrus_bit_mask).eq(0))
 
     # Sentinel-2 SR values are scaled by 10000.
     return image.updateMask(mask).divide(10000)
@@ -55,9 +45,7 @@ def add_ndvi(image: ee.Image) -> ee.Image:
         B4 = RED
     """
 
-    ndvi = image.normalizedDifference(
-        ["B8", "B4"]
-    ).rename("NDVI")
+    ndvi = image.normalizedDifference(["B8", "B4"]).rename("NDVI")
 
     return image.addBands(ndvi)
 
@@ -67,7 +55,7 @@ def build_ndvi_collection(
     start_date: str,
     end_date: str,
     max_cloud_percentage: float = 20.0,
-) -> tuple[ee.ImageCollection, int]:
+) -> tuple[ee.ImageCollection, ee.Number]:
     """
     Build a cloud-masked Sentinel-2 NDVI collection.
 
@@ -86,11 +74,10 @@ def build_ndvi_collection(
         .filterDate(start_date, end_date)
     )
 
-    source_image_count = source_collection.size().getInfo()
+    source_image_count = source_collection.size()
 
     filtered_collection = (
-        source_collection
-        .filter(
+        source_collection.filter(
             ee.Filter.lt(
                 "CLOUDY_PIXEL_PERCENTAGE",
                 max_cloud_percentage,
@@ -107,7 +94,7 @@ def calculate_valid_coverage(
     image: ee.Image,
     aoi: ee.Geometry,
     scale: int = 10,
-) -> float:
+) -> ee.Number:
     """
     Estimate the fraction of the AOI containing valid NDVI pixels.
 
@@ -115,11 +102,7 @@ def calculate_valid_coverage(
         Value between 0 and 1.
     """
 
-    valid_mask = (
-        image.select("NDVI")
-        .mask()
-        .rename("valid")
-    )
+    valid_mask = image.select("NDVI").mask().rename("valid")
 
     coverage = valid_mask.reduceRegion(
         reducer=ee.Reducer.mean(),
@@ -129,56 +112,56 @@ def calculate_valid_coverage(
         bestEffort=True,
     ).get("valid")
 
-    coverage_value = coverage.getInfo()
-
-    if coverage_value is None:
-        return 0.0
-
-    return float(coverage_value)
+    return ee.Number(coverage)
 
 
 def calculate_ndvi_statistics(
     ndvi_composite: ee.Image,
     aoi: ee.Geometry,
     scale: int = 10,
-) -> dict[str, float]:
+) -> ee.Dictionary:
     """
     Calculate regional NDVI statistics for the composite.
     """
 
-    statistics = (
-        ndvi_composite
-        .select("NDVI")
-        .reduceRegion(
-            reducer=(
-                ee.Reducer.mean()
-                .combine(
-                    reducer2=ee.Reducer.min(),
-                    sharedInputs=True,
-                )
-                .combine(
-                    reducer2=ee.Reducer.max(),
-                    sharedInputs=True,
-                )
-                .combine(
-                    reducer2=ee.Reducer.stdDev(),
-                    sharedInputs=True,
-                )
-            ),
-            geometry=aoi,
-            scale=scale,
-            maxPixels=1e9,
-            bestEffort=True,
-        )
-        .getInfo()
+    statistics = ndvi_composite.select("NDVI").reduceRegion(
+        reducer=(
+            ee.Reducer.mean()
+            .combine(
+                reducer2=ee.Reducer.min(),
+                sharedInputs=True,
+            )
+            .combine(
+                reducer2=ee.Reducer.max(),
+                sharedInputs=True,
+            )
+            .combine(
+                reducer2=ee.Reducer.stdDev(),
+                sharedInputs=True,
+            )
+        ),
+        geometry=aoi,
+        scale=scale,
+        maxPixels=1e9,
+        bestEffort=True,
     )
 
-    return {
-        "mean": float(statistics.get("NDVI_mean", 0.0)),
-        "min": float(statistics.get("NDVI_min", 0.0)),
-        "max": float(statistics.get("NDVI_max", 0.0)),
-        "std_dev": float(statistics.get("NDVI_stdDev", 0.0)),
-    }
+    # Use ee.Algorithms.If to handle potentially missing keys
+    def get_or_default(key):
+        return ee.Algorithms.If(
+            statistics.contains(key),
+            statistics.getNumber(key),
+            ee.Number(0.0)
+        )
+
+    return ee.Dictionary(
+        {
+            "mean": get_or_default("NDVI_mean"),
+            "min": get_or_default("NDVI_min"),
+            "max": get_or_default("NDVI_max"),
+            "std_dev": get_or_default("NDVI_stdDev"),
+        }
+    )
 
 
 def analyze_ndvi(
@@ -242,9 +225,7 @@ def analyze_ndvi(
         raise ValueError("scale must be greater than zero")
 
     if not 0 <= max_cloud_percentage <= 100:
-        raise ValueError(
-            "max_cloud_percentage must be between 0 and 100"
-        )
+        raise ValueError("max_cloud_percentage must be between 0 and 100")
 
     collection, source_image_count = build_ndvi_collection(
         aoi=aoi,
@@ -253,9 +234,15 @@ def analyze_ndvi(
         max_cloud_percentage=max_cloud_percentage,
     )
 
-    usable_image_count = collection.size().getInfo()
+    # Fetch counts early to avoid exception on empty collection
+    counts = ee.Dictionary(
+        {
+            "source": source_image_count,
+            "usable": collection.size(),
+        }
+    ).getInfo()
 
-    if usable_image_count == 0:
+    if counts["usable"] == 0:
         raise ValueError(
             "No usable Sentinel-2 images were found "
             "for the supplied AOI and date range."
@@ -264,59 +251,62 @@ def analyze_ndvi(
     # Create one representative image for the period.
     ndvi_composite = collection.median()
 
-    statistics = calculate_ndvi_statistics(
+    statistics_dict = calculate_ndvi_statistics(
         ndvi_composite=ndvi_composite,
         aoi=aoi,
         scale=scale,
     )
 
-    valid_coverage = calculate_valid_coverage(
+    valid_coverage_number = calculate_valid_coverage(
         image=ndvi_composite,
         aoi=aoi,
         scale=scale,
     )
 
+    # Batch remaining Earth Engine API calls into a single request
+    results = ee.Dictionary(
+        {
+            "statistics": statistics_dict,
+            "valid_coverage": valid_coverage_number,
+        }
+    ).getInfo()
+
     limitations = [
-        "NDVI is a vegetation indicator and should not "
-        "be interpreted as a direct measure of biomass.",
-        "Cloud masking can leave areas with insufficient "
-        "valid observations.",
-        "The median composite represents the selected "
-        "time period rather than a single observation.",
-        "This PoC does not yet perform seasonal normalization "
-        "or atmospheric-quality sensitivity analysis.",
+        ("NDVI is a vegetation indicator and should not "
+        "be interpreted as a direct measure of biomass."),
+        "Cloud masking can leave areas with insufficient valid observations.",
+        ("The median composite represents the selected "
+        "time period rather than a single observation."),
+        ("This PoC does not yet perform seasonal normalization "
+        "or atmospheric-quality sensitivity analysis."),
     ]
 
     return AnalysisResult(
         analysis_type="ndvi_analysis",
-
         findings={
-            "mean_ndvi": statistics["mean"],
-            "minimum_ndvi": statistics["min"],
-            "maximum_ndvi": statistics["max"],
-            "ndvi_std_dev": statistics["std_dev"],
+            "mean_ndvi": float(results["statistics"].get("mean", 0.0)),
+            "minimum_ndvi": float(results["statistics"].get("min", 0.0)),
+            "maximum_ndvi": float(results["statistics"].get("max", 0.0)),
+            "ndvi_std_dev": float(results["statistics"].get("std_dev", 0.0)),
             "start_date": start_date,
             "end_date": end_date,
         },
-
         data_quality=DataQuality(
-            source_image_count=source_image_count,
-            usable_image_count=usable_image_count,
-            valid_coverage=valid_coverage,
+            source_image_count=int(counts["source"]),
+            usable_image_count=int(counts["usable"]),
+            valid_coverage=float(results["valid_coverage"])
+            if results["valid_coverage"] is not None
+            else 0.0,
         ),
-
         methodology=Methodology(
             dataset=S2_DATASET,
             resolution_m=scale,
             composite_method="median",
             cloud_masking=(
-                "QA60 cloud and cirrus masking + "
-                "scene CLOUDY_PIXEL_PERCENTAGE filter"
+                "QA60 cloud and cirrus masking + scene CLOUDY_PIXEL_PERCENTAGE filter"
             ),
             index="NDVI = (B8 - B4) / (B8 + B4)",
         ),
-
         limitations=limitations,
-
         visualizations={},
     )
