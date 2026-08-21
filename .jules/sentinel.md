@@ -1,0 +1,4 @@
+## 2025-08-21 - [Prompt Injection Mitigation in Gemini SDK]
+**Vulnerability:** System instructions were being mixed with user prompts and sent via the standard `contents` parameter or list array in `google.genai.models.generate_content`. This is susceptible to prompt injection where untrusted user input can override system rules.
+**Learning:** The `google-genai` SDK allows passing system instructions properly separated via `types.GenerateContentConfig(system_instruction=...)`. It is crucial to firmly separate system instructions from untrusted user content, especially when executing autonomous analysis and returning structured data.
+**Prevention:** Always use `types.GenerateContentConfig(system_instruction=...)` for any system prompts or behavior guidelines. Pass untrusted user inputs solely via the `contents` parameter.

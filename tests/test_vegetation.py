@@ -43,14 +43,19 @@ def test_analyze_ndvi_invalid_cloud_percentage():
         )
 
 
+@patch("app.analysis.vegetation.ee.Algorithms")
+@patch("app.analysis.vegetation.calculate_valid_coverage")
+@patch("app.analysis.vegetation.calculate_ndvi_statistics")
 @patch("app.analysis.vegetation.ee.Dictionary")
 @patch("app.analysis.vegetation.build_ndvi_collection")
-def test_analyze_ndvi_no_usable_images(mock_build_ndvi_collection, mock_dictionary):
+def test_analyze_ndvi_no_usable_images(mock_build_ndvi_collection, mock_dictionary, mock_calc_stats, mock_calc_cov, mock_algorithms):
     mock_build_ndvi_collection.return_value = (MagicMock(), MagicMock())
 
     mock_dict_instance = MagicMock()
     mock_dict_instance.getInfo.return_value = {"counts": {"source": 10, "usable": 0}, "analysis": None}
     mock_dictionary.return_value = mock_dict_instance
+    mock_calc_stats.return_value = MagicMock()
+    mock_calc_cov.return_value = MagicMock()
 
     with pytest.raises(ValueError, match="No usable Sentinel-2 images were found"):
         analyze_ndvi(
@@ -60,6 +65,7 @@ def test_analyze_ndvi_no_usable_images(mock_build_ndvi_collection, mock_dictiona
         )
 
 
+@patch("app.analysis.vegetation.ee.Algorithms")
 @patch("app.analysis.vegetation.ee.Dictionary")
 @patch("app.analysis.vegetation.calculate_valid_coverage")
 @patch("app.analysis.vegetation.calculate_ndvi_statistics")
@@ -69,6 +75,7 @@ def test_analyze_ndvi_success(
     mock_calculate_ndvi_statistics,
     mock_calculate_valid_coverage,
     mock_dictionary,
+    mock_algorithms
 ):
     mock_collection = MagicMock()
     mock_build_ndvi_collection.return_value = (mock_collection, MagicMock())

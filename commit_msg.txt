@@ -1,0 +1,7 @@
+🛡️ Sentinel: [CRITICAL] Mitigate prompt injection via system instructions
+
+🚨 Severity: CRITICAL
+💡 Vulnerability: System instructions were being mixed with user prompts and sent via the standard `contents` parameter or list array in `google.genai.models.generate_content`, allowing untrusted user input to override system rules (prompt injection).
+🎯 Impact: Attackers could inject arbitrary commands that override the agent's constraints and cause it to behave maliciously or unpredictably.
+🔧 Fix: Utilized the `google-genai` SDK's `types.GenerateContentConfig(system_instruction=...)` to properly separate system instructions from untrusted user content in `app/agent/gemini.py`.
+✅ Verification: Ran unit tests and ensured that they continue to pass correctly. Also checked that `system_instruction` is passed properly.
