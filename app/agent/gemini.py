@@ -1,6 +1,8 @@
 # app/agent/gemini.py
 import os
 import json
+import functools
+from functools import lru_cache
 
 from dotenv import load_dotenv
 from google import genai
@@ -15,6 +17,7 @@ load_dotenv()
 MODEL_NAME = "gemini-3.5-flash-lite"
 
 
+@lru_cache()
 def create_gemini_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY")
 
@@ -58,6 +61,7 @@ def make_gemini_parameters(schema: dict) -> dict:
     return parameters
 
 
+@functools.lru_cache(maxsize=None)
 def get_gemini_tool_declarations():
     declarations = []
 
@@ -222,7 +226,7 @@ def create_analysis_plan(prompt: str) -> AnalysisPlan:
 
     print("Creating plan....")
 
-    planning_prompt = f"""
+    system_instruction = """
                 You are the planning component of a geospatial analysis agent.
 
                 Your job is to determine which available analyses
@@ -246,7 +250,9 @@ def create_analysis_plan(prompt: str) -> AnalysisPlan:
                 order they should be performed.
                 - Do not perform the analysis yourself.
                 - Do not invent numerical results.
+                """
 
+    user_content = f"""
                 User question:
 
                 {prompt}
@@ -254,8 +260,9 @@ def create_analysis_plan(prompt: str) -> AnalysisPlan:
 
     response = client.models.generate_content(
         model=MODEL_NAME,
-        contents=planning_prompt,
+        contents=user_content,
         config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
             response_mime_type="application/json",
             response_schema=AnalysisPlan,
         ),
@@ -283,7 +290,7 @@ def synthesize_analysis_results(
             }
         )
 
-    synthesis_prompt = f"""
+    system_instruction = """
                 You are the synthesis component of a geospatial
                 analysis agent.
 
@@ -301,6 +308,10 @@ def synthesize_analysis_results(
                 If an analysis failed validation, do not present its
                 results as reliable evidence.
 
+                Provide a concise, evidence-backed answer.
+                """
+
+    user_content = f"""
                 User question:
                 {prompt}
 
@@ -309,13 +320,14 @@ def synthesize_analysis_results(
 
                 Evidence:
                 {evidence}
-
-                Provide a concise, evidence-backed answer.
                 """
 
     response = client.models.generate_content(
         model=MODEL_NAME,
-        contents=synthesis_prompt,
+        contents=user_content,
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+        ),
     )
 
     return response.text
