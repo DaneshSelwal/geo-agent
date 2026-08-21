@@ -234,42 +234,55 @@ def analyze_ndvi(
         max_cloud_percentage=max_cloud_percentage,
     )
 
-    # Fetch counts early to avoid exception on empty collection
-    counts = ee.Dictionary(
+    usable_image_count = collection.size()
+
+    # We use ee.Algorithms.If to only calculate statistics and coverage
+    # if the collection is not empty, avoiding server-side exceptions.
+    def calculate_results(usable_count):
+        ndvi_composite = collection.median()
+        statistics_dict = calculate_ndvi_statistics(
+            ndvi_composite=ndvi_composite,
+            aoi=aoi,
+            scale=scale,
+        )
+        valid_coverage_number = calculate_valid_coverage(
+            image=ndvi_composite,
+            aoi=aoi,
+            scale=scale,
+        )
+        return ee.Dictionary({
+            "statistics": statistics_dict,
+            "valid_coverage": valid_coverage_number,
+        })
+
+    empty_results = ee.Dictionary({
+        "statistics": ee.Dictionary({}),
+        "valid_coverage": ee.Number(0.0),
+    })
+
+    analysis_results = ee.Dictionary(
+        ee.Algorithms.If(
+            usable_image_count.gt(0),
+            calculate_results(usable_image_count),
+            empty_results
+        )
+    )
+
+    # Batch all Earth Engine API calls into a single request
+    results = ee.Dictionary(
         {
             "source": source_image_count,
-            "usable": collection.size(),
+            "usable": usable_image_count,
+            "statistics": analysis_results.get("statistics"),
+            "valid_coverage": analysis_results.get("valid_coverage"),
         }
     ).getInfo()
 
-    if counts["usable"] == 0:
+    if results["usable"] == 0:
         raise ValueError(
             "No usable Sentinel-2 images were found "
             "for the supplied AOI and date range."
         )
-
-    # Create one representative image for the period.
-    ndvi_composite = collection.median()
-
-    statistics_dict = calculate_ndvi_statistics(
-        ndvi_composite=ndvi_composite,
-        aoi=aoi,
-        scale=scale,
-    )
-
-    valid_coverage_number = calculate_valid_coverage(
-        image=ndvi_composite,
-        aoi=aoi,
-        scale=scale,
-    )
-
-    # Batch remaining Earth Engine API calls into a single request
-    results = ee.Dictionary(
-        {
-            "statistics": statistics_dict,
-            "valid_coverage": valid_coverage_number,
-        }
-    ).getInfo()
 
     limitations = [
         ("NDVI is a vegetation indicator and should not "
@@ -292,8 +305,8 @@ def analyze_ndvi(
             "end_date": end_date,
         },
         data_quality=DataQuality(
-            source_image_count=int(counts["source"]),
-            usable_image_count=int(counts["usable"]),
+            source_image_count=int(results["source"]),
+            usable_image_count=int(results["usable"]),
             valid_coverage=float(results["valid_coverage"])
             if results["valid_coverage"] is not None
             else 0.0,
