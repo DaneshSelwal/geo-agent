@@ -21,9 +21,15 @@ class NDVIToolInput(BaseModel):
         description="GeoJSON geometry representing the area of interest."
     )
 
-    start_date: str = Field(description="Analysis start date in YYYY-MM-DD format.")
+    start_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Analysis start date in YYYY-MM-DD format.",
+    )
 
-    end_date: str = Field(description="Analysis end date in YYYY-MM-DD format.")
+    end_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Analysis end date in YYYY-MM-DD format.",
+    )
 
     max_cloud_percentage: float = Field(
         default=20.0,
@@ -40,8 +46,14 @@ class LandcoverToolInput(BaseModel):
         description="GeoJSON geometry representing the area of interest."
     )
 
-    start_date: str = Field(description="Analysis start date in YYYY-MM-DD format.")
+    start_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Analysis start date in YYYY-MM-DD format.",
+    )
 
-    end_date: str = Field(description="Analysis end date in YYYY-MM-DD format.")
+    end_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Analysis end date in YYYY-MM-DD format.",
+    )
 
     scale: int = Field(default=10, gt=0, description="Analysis resolution in meters.")
