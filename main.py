@@ -2,9 +2,6 @@ import ee
 
 from app.analysis.vegetation import analyze_ndvi
 from app.gee import initialize_gee
-from app.validation.validator import (
-    validate_analysis_result,
-)
 from app.tools.ndvi_tool import ndvi_tool
 from app.config import GEE_PROJECT_ID
 
